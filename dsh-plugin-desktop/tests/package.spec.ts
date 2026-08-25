@@ -44,7 +44,7 @@ const manifest = JSON.parse(readFileSync(new URL('package.json', packageRoot), '
       target?: unknown
       x64ArchFiles?: unknown
     }
-    win?: { icon?: unknown; target?: unknown; artifactName?: unknown }
+    win?: { icon?: unknown; target?: unknown; artifactName?: unknown; compression?: unknown }
     nsis?: Record<string, unknown>
     portable?: Record<string, unknown>
     linux?: Record<string, unknown>
@@ -613,6 +613,7 @@ describe('published package surface', () => {
       arch: ['x64'],
     }])
     expect(manifest.build?.win?.artifactName).toBe('DSH-Desktop-${version}-${arch}-Portable.${ext}')
+    expect(manifest.build?.win?.compression).toBe('store')
     expect(manifest.build?.nsis).toEqual({
       license: 'THIRD_PARTY_NOTICES.md',
       oneClick: false,

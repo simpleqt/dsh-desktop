@@ -349,7 +349,8 @@
         }
       ],
       "artifactName": "DSH-Desktop-${version}-${arch}-Portable.${ext}",
-      "icon": "build/app-icon.png"
+      "icon": "build/app-icon.png",
+      "compression": "store"
     },
     "nsis": {
       "license": "THIRD_PARTY_NOTICES.md",

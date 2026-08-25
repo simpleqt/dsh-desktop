@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  DPKG_OUTPUT_MAX_BYTES,
   verifyLinuxArtifacts,
   type LinuxArtifactVerificationOptions,
 } from '../scripts/verify-linux-artifacts.ts'
@@ -79,6 +80,10 @@ afterEach(() => {
 })
 
 describe('Linux DEB artifact verification', () => {
+  it('bounds large dpkg file listings above Node default output capacity', () => {
+    expect(DPKG_OUTPUT_MAX_BYTES).toBe(64 * 1024 * 1024)
+  })
+
   it('accepts exact amd64 and arm64 DEB and staging artifacts', () => {
     const value = fixture()
 

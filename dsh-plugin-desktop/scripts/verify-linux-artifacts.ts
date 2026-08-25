@@ -18,6 +18,7 @@ const PACKAGE_ARCHES = [
 
 const ELF_HEADER_BYTES = 20
 const AR_MAGIC = Buffer.from('!<arch>\n', 'ascii')
+export const DPKG_OUTPUT_MAX_BYTES = 64 * 1024 * 1024
 
 export interface LinuxArtifactVerificationOptions {
   readonly distDir: string
@@ -64,7 +65,10 @@ function defaultOptions(): LinuxArtifactVerificationOptions {
         closeSync(handle)
       }
     },
-    run: (command, args) => execFileSync(command, args, { encoding: 'utf8' }),
+    run: (command, args) => execFileSync(command, args, {
+      encoding: 'utf8',
+      maxBuffer: DPKG_OUTPUT_MAX_BYTES,
+    }),
   }
 }
 
