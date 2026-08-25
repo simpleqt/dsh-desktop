@@ -11,6 +11,7 @@ import {
   FORBIDDEN_MACOS_UNIVERSAL_ENTRIES,
   MACOS_UNIVERSAL_NATIVE_ENTRIES,
 } from './mac-universal.ts'
+import { linuxNativeEntries, type LinuxPackageArch } from './linux-runtime.ts'
 
 /** AfterPack fields consumed without importing Electron Builder's incomplete declaration graph. */
 export interface PackagedRuntimeContext {
@@ -103,6 +104,12 @@ export const REQUIRED_WINDOWS_X64_NODE_PTY_ENTRIES = [
 /** CPU-specific runtime assets that must coexist in a universal macOS application. */
 export const REQUIRED_MACOS_UNIVERSAL_ENTRIES = [
   ...MACOS_UNIVERSAL_NATIVE_ENTRIES.map(entry => entry.path),
+] as const
+
+/** Native files that must be physical in every architecture-specific Linux package. */
+export const REQUIRED_LINUX_NATIVE_ENTRIES = [
+  ...linuxNativeEntries('x64').map(entry => entry.path),
+  ...linuxNativeEntries('arm64').map(entry => entry.path),
 ] as const
 
 /** Package exports that profile fallback links must resolve from the physical application tree. */
@@ -375,7 +382,12 @@ export function verifyPackagedRuntime(
     ? [...REQUIRED_UNPACKED_RUNTIME_ENTRIES, ...REQUIRED_WINDOWS_X64_NODE_PTY_ENTRIES]
     : context.electronPlatformName === 'darwin' && context.arch === 4
       ? [...REQUIRED_UNPACKED_RUNTIME_ENTRIES, ...REQUIRED_MACOS_UNIVERSAL_ENTRIES]
-      : REQUIRED_UNPACKED_RUNTIME_ENTRIES
+      : context.electronPlatformName === 'linux'
+        ? [
+            ...REQUIRED_UNPACKED_RUNTIME_ENTRIES,
+            ...linuxNativeEntries(resolveLinuxArch(context.arch)).map(entry => entry.path),
+          ]
+        : REQUIRED_UNPACKED_RUNTIME_ENTRIES
   const missing = requiredPhysicalEntries.filter(entry => !exists(join(unpackedRoot, entry)))
   if (missing.length > 0) {
     throw new Error(
@@ -393,6 +405,12 @@ export function verifyPackagedRuntime(
   }
   verifyUnpackedArchiveMirror(archiveEntries, unpackedRoot, exists)
   verifyUnpackedPackageResolution(unpackedRoot, resolvePackage)
+}
+
+function resolveLinuxArch(arch: number | undefined): LinuxPackageArch {
+  if (arch === 1) return 'x64'
+  if (arch === 3) return 'arm64'
+  throw new Error(`dsh-plugin-desktop: unsupported Linux package architecture ${String(arch)}`)
 }
 
 /**

@@ -47,7 +47,8 @@ const manifest = JSON.parse(readFileSync(new URL('package.json', packageRoot), '
     win?: { icon?: unknown; target?: unknown; artifactName?: unknown }
     nsis?: Record<string, unknown>
     portable?: Record<string, unknown>
-    linux?: { icon?: unknown }
+    linux?: Record<string, unknown>
+    deb?: Record<string, unknown>
   }
   dependencies?: Record<string, unknown>
   optionalDependencies?: Record<string, unknown>
@@ -625,7 +626,20 @@ describe('published package surface', () => {
       useZip: false,
       artifactName: 'DSH-Desktop-${version}-${arch}-Setup.${ext}',
     })
-    expect(manifest.build?.linux?.icon).toBe('build/app-icon.png')
+    expect(manifest.build?.linux).toEqual({
+      target: [{ target: 'deb', arch: ['x64', 'arm64'] }],
+      artifactName: 'DSH-Desktop-${version}-${arch}.${ext}',
+      category: 'Development',
+      executableName: 'dsh-desktop',
+      icon: 'build/app-icon.png',
+      maintainer: 'Anywhere Labs <t4wefan@qq.com>',
+      synopsis: 'Desktop shell for DeepSeek Harness',
+      syncDesktopName: true,
+    })
+    expect(manifest.build?.deb).toEqual({
+      compression: 'xz',
+      packageName: 'dsh-desktop',
+    })
   })
 
   it('separates unsigned smoke packaging from the signed macOS release', () => {
@@ -636,6 +650,7 @@ describe('published package surface', () => {
     expect(packageDir).toContain("CSC_IDENTITY_AUTO_DISCOVERY: 'false'")
     expect(manifest.scripts?.['dist:mac']).toBe('node scripts/release-mac.ts')
     expect(manifest.scripts?.['dist:mac-smoke']).toBe('node scripts/package-mac.ts')
+    expect(manifest.scripts?.['dist:linux']).toBe('node scripts/package-linux.ts')
     expect(manifest.scripts?.['dist:win']).toBe('node scripts/package-win.ts')
     expect(manifest.scripts?.['dist:win-portable']).toBe('node scripts/package-win-portable.ts')
     expect(manifest.scripts?.['check:win-package']).toContain('yarn workspace dsh-community-market build')
@@ -654,12 +669,19 @@ describe('published package surface', () => {
     expect(manifest.scripts?.['check:mac-package']).toContain('tests/verify-mac-smoke.spec.ts')
     expect(manifest.scripts?.['check:mac-package']).toContain('tests/mac-universal.spec.ts')
     expect(manifest.scripts?.['check:mac-package']).toContain('yarn run verify:closure')
+    expect(manifest.scripts?.['check:linux-package']).toContain('yarn workspace dsh-community-market build')
+    expect(manifest.scripts?.['check:linux-package']).toContain('tests/package-linux.spec.ts')
+    expect(manifest.scripts?.['check:linux-package']).toContain('tests/verify-linux-artifacts.spec.ts')
+    expect(manifest.scripts?.['check:linux-package']).toContain('tests/linux-runtime.spec.ts')
+    expect(manifest.scripts?.['check:linux-package']).toContain('yarn run verify:closure')
     expect(manifest.scripts?.['verify:cli']).toBe('node scripts/verify-cli-runtime.mjs')
     expect(manifest.scripts?.check).toContain('yarn run verify:cli')
     expect(workspaceManifest.scripts?.['dist:mac'])
       .toBe('yarn workspace dsh-community-market build && yarn workspace dsh-plugin-desktop dist:mac')
     expect(workspaceManifest.scripts?.['dist:mac-smoke'])
       .toBe('yarn workspace dsh-community-market build && yarn workspace dsh-plugin-desktop dist:mac-smoke')
+    expect(workspaceManifest.scripts?.['dist:linux'])
+      .toBe('yarn workspace dsh-community-market build && yarn workspace dsh-plugin-desktop dist:linux')
     expect(workspaceManifest.scripts?.['dist:win'])
       .toBe('yarn workspace dsh-community-market build && yarn workspace dsh-plugin-desktop dist:win')
     expect(workspaceManifest.scripts?.['dist:win-portable'])
@@ -689,6 +711,10 @@ describe('published package surface', () => {
     )
     const macosJob = ciWorkflow.slice(
       ciWorkflow.indexOf('  desktop-macos:'),
+      ciWorkflow.indexOf('  desktop-linux:'),
+    )
+    const linuxJob = ciWorkflow.slice(
+      ciWorkflow.indexOf('  desktop-linux:'),
       ciWorkflow.indexOf('  upstream-command-windows:'),
     )
 
@@ -702,6 +728,12 @@ describe('published package surface', () => {
     expect(macosJob).toContain('run: yarn workspace dsh-plugin-desktop dist:mac-smoke')
     expect(macosJob).toContain('DSH_PACKAGE_CHECK_ALREADY_RAN: \'1\'')
     expect(macosJob).not.toContain('- run: yarn dist:mac-smoke')
+    expect(linuxJob).not.toContain('- run: yarn check')
+    expect(linuxJob).toContain('- run: yarn workspace dsh-plugin-desktop check:linux-package')
+    expect(linuxJob).toContain('run: yarn workspace dsh-plugin-desktop dist:linux')
+    expect(linuxJob).toContain('DSH_PACKAGE_CHECK_ALREADY_RAN: \'1\'')
+    expect(linuxJob).toContain('path: dsh-plugin-desktop/dist/linux/*.deb')
+    expect(linuxJob).toContain('if-no-files-found: error')
   })
 
   it('skips product packaging only for documentation-only changes', () => {

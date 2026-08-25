@@ -209,6 +209,20 @@ corepack yarn build
 
 从 `/mnt/<drive>` 运行命令是有效的，但会比放在 WSL 原生 ext4 文件系统中的 checkout 更慢。WSL 不能替代真实 Linux 桌面会话来验证托盘、窗口管理器、`.desktop` 集成或安装后 smoke test。
 
+### Linux DEB 安装包
+
+在原生 glibc Linux x64 宿主上使用 Node `22.19+` 或 Node `24.x` 执行 `yarn dist:linux`。该命令会先运行 Linux 打包 gate，检查已安装的 amd64 与 arm64 Landlock、Sharp、Koffi、ripgrep、Node-API 和 node-pty 二进制，再在不发布产物的前提下构建两种 Debian 架构：
+
+```bash
+git submodule update --init --recursive
+corepack yarn install --immutable
+corepack yarn dist:linux
+```
+
+产物为 `dsh-plugin-desktop/dist/linux/DSH-Desktop-2.0.3-amd64.deb` 与 `dsh-plugin-desktop/dist/linux/DSH-Desktop-2.0.3-arm64.deb`。Verifier 会检查每个 staging 主程序的 ELF 架构、DEB 归档头、包名、版本、架构、内置 `app.asar` 和安装后的 desktop entry。CI 会在 Ubuntu 上运行同一套打包 gate，并在不二次压缩的情况下上传两个文件。
+
+用 `dpkg --print-architecture` 确认本机架构后，执行 `sudo apt install ./DSH-Desktop-2.0.3-amd64.deb`（arm64 机器改用对应文件），随后可以从应用菜单启动 **DSH Desktop**，也可以执行 `dsh-desktop`。使用 `sudo apt remove dsh-desktop` 可卸载安装包；用户配置目录中的 profile、日志与缓存会保留。Linux 只使用兼容呈现，没有托盘终端命令，也不参与 macOS/Windows 的应用内安装包交接，因此升级时需要通过系统包管理器安装新版 DEB。
+
 ### Windows x64 本地安装包
 
 请使用原生 Windows x64 电脑，并安装 Git 与 x64 Node `22.23.2`（与 CI 使用的版本相同）。打包命令接受官方发行版仍包含所需 Corepack 命令的 Node `22.19+` 与 Node `24.x`。在一个最新的 `v2` checkout 中打开 PowerShell，然后执行：

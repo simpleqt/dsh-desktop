@@ -209,6 +209,20 @@ corepack yarn build
 
 Commands run from `/mnt/<drive>` are valid but slower than a checkout stored on WSL's native ext4 filesystem. WSL does not replace a real Linux desktop session for tray, window-manager, `.desktop` integration, or installed-package smoke tests.
 
+### Linux DEB packages
+
+Run `yarn dist:linux` on a native glibc Linux x64 host with Node `22.19+` or Node `24.x`. The command runs the Linux package gate, verifies the installed amd64 and arm64 Landlock, Sharp, Koffi, ripgrep, Node-API, and node-pty binaries, then builds both Debian architectures without publishing:
+
+```bash
+git submodule update --init --recursive
+corepack yarn install --immutable
+corepack yarn dist:linux
+```
+
+The artifacts are `dsh-plugin-desktop/dist/linux/DSH-Desktop-2.0.3-amd64.deb` and `dsh-plugin-desktop/dist/linux/DSH-Desktop-2.0.3-arm64.deb`. The verifier checks each staging executable's ELF architecture, the DEB archive header, package name, version, architecture, bundled `app.asar`, and installed desktop entry. CI runs the same package gate on Ubuntu and uploads both files without recompressing them.
+
+Install the artifact matching `dpkg --print-architecture` with `sudo apt install ./DSH-Desktop-2.0.3-amd64.deb` (or the arm64 filename), then launch **DSH Desktop** from the application menu or run `dsh-desktop`. Remove the package with `sudo apt remove dsh-desktop`; profiles, logs, and caches in the user's configuration directory are retained. Linux uses compatibility presentation only, has no tray terminal command, and does not participate in the macOS/Windows in-app installer handoff, so upgrades use a newer DEB through the system package manager.
+
 ### Local Windows x64 installer
 
 Use a native Windows x64 machine with Git and x64 Node `22.23.2` (the same release used by CI). The packaging command accepts Node `22.19+` and Node `24.x`, whose official distributions include the required Corepack command. From PowerShell in a fresh `v2` checkout, run:

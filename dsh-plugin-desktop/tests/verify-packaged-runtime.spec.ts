@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import AdmZip from 'adm-zip'
 import {
   afterPack,
+  REQUIRED_LINUX_NATIVE_ENTRIES,
   REQUIRED_PACKAGED_RUNTIME_ENTRIES,
   REQUIRED_MACOS_UNIVERSAL_ENTRIES,
   REQUIRED_UNPACKED_PACKAGE_SPECIFIERS,
@@ -21,6 +22,7 @@ import {
   type PackagedDiagnosticWorkerLauncher,
 } from '../scripts/verify-packaged-runtime.ts'
 import { FORBIDDEN_MACOS_UNIVERSAL_ENTRIES } from '../scripts/mac-universal.ts'
+import { linuxNativeEntries } from '../scripts/linux-runtime.ts'
 
 function context(
   appOutDir: string,
@@ -60,7 +62,7 @@ describe('packaged desktop runtime verification', () => {
       .rejects.toThrow('packaged diagnostic worker omitted crash-dumps/pending/packaged-smoke.dmp')
   })
 
-  it.each(['darwin', 'win32'])(
+  it.each(['darwin', 'linux', 'win32'])(
     'targets the physical diagnostic Worker in the %s unpacked layout and removes smoke files',
     async (platform) => {
       const unpackedRoot = resolvePackagedUnpackedRoot(context('/build', platform))
@@ -117,27 +119,35 @@ describe('packaged desktop runtime verification', () => {
     [
       'darwin',
       join('/build', 'DSH Desktop.app', 'Contents', 'Resources', 'app.asar'),
+      undefined,
     ],
     [
       'win32',
       join('/build', 'resources', 'app.asar'),
+      undefined,
     ],
-  ])('inspects the %s app.asar path', (platform, expectedPath) => {
+    [
+      'linux',
+      join('/build', 'resources', 'app.asar'),
+      1,
+    ],
+  ] as const)('inspects the %s app.asar path', (platform, expectedPath, arch) => {
     const list = vi.fn<ArchiveLister>(() => completeArchiveEntries(platform === 'win32' ? '\\' : '/'))
 
     const exists = vi.fn<FileProbe>(() => true)
     const unpackedRoot = `${expectedPath}.unpacked`
     const resolvePackage = vi.fn<PackageResolver>(completePackageResolver(unpackedRoot))
 
-    verifyPackagedRuntime(context('/build', platform), list, exists, resolvePackage)
+    verifyPackagedRuntime(context('/build', platform, arch), list, exists, resolvePackage)
 
-    expect(resolvePackagedAsarPath(context('/build', platform))).toBe(expectedPath)
+    expect(resolvePackagedAsarPath(context('/build', platform, arch))).toBe(expectedPath)
     expect(list).toHaveBeenCalledOnce()
     expect(list).toHaveBeenCalledWith(expectedPath, { isPack: false })
-    expect(resolvePackagedUnpackedRoot(context('/build', platform))).toBe(unpackedRoot)
+    expect(resolvePackagedUnpackedRoot(context('/build', platform, arch))).toBe(unpackedRoot)
     expect(exists).toHaveBeenCalledTimes(
       REQUIRED_UNPACKED_RUNTIME_ENTRIES.length
         + (platform === 'win32' ? REQUIRED_WINDOWS_X64_NODE_PTY_ENTRIES.length : 0)
+        + (platform === 'linux' ? linuxNativeEntries('x64').length : 0)
         + completeArchiveEntries().length,
     )
     expect(resolvePackage.mock.calls.map(([specifier]) => specifier))
@@ -175,6 +185,46 @@ describe('packaged desktop runtime verification', () => {
         + FORBIDDEN_MACOS_UNIVERSAL_ENTRIES.length
         + completeArchiveEntries().length,
     )
+  })
+
+  it.each([
+    [1, 'x64'],
+    [3, 'arm64'],
+  ] as const)('requires the Linux %s native runtime', (arch, archName) => {
+    const runtimeContext = context('/build', 'linux', arch)
+    const unpackedRoot = resolvePackagedUnpackedRoot(runtimeContext)
+    const missing = linuxNativeEntries(archName)[0]!.path
+
+    expect(() => verifyPackagedRuntime(
+      runtimeContext,
+      () => completeArchiveEntries(),
+      filename => filename !== join(unpackedRoot, missing),
+      completePackageResolver(unpackedRoot),
+    )).toThrow(`missing required physical entries: ${missing}`)
+
+    verifyPackagedRuntime(
+      runtimeContext,
+      () => completeArchiveEntries(),
+      () => true,
+      completePackageResolver(unpackedRoot),
+    )
+  })
+
+  it('rejects an unknown Linux package architecture', () => {
+    const runtimeContext = context('/build', 'linux', 2)
+
+    expect(() => verifyPackagedRuntime(
+      runtimeContext,
+      () => completeArchiveEntries(),
+      () => true,
+    )).toThrow('unsupported Linux package architecture 2')
+  })
+
+  it('tracks every Linux native path in the packaged-runtime gate', () => {
+    expect(REQUIRED_LINUX_NATIVE_ENTRIES).toEqual([
+      ...linuxNativeEntries('x64').map(entry => entry.path),
+      ...linuxNativeEntries('arm64').map(entry => entry.path),
+    ])
   })
 
   it('rejects any ASAR-declared unpacked dependency missing from the physical tree', () => {
